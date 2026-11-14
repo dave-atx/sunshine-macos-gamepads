@@ -52,7 +52,10 @@ namespace config {
    * @brief Configuration keys whose values must be hidden in logs.
    */
   inline constexpr std::array redacted_config = {
-    "csrf_allowed_origins"
+    "csrf_allowed_origins",
+    // The OJD endpoint token grants control of virtual gamepads, so it is a
+    // secret: never print it in logs or persist it to the Web UI.
+    "ojd_token"
   };
 
   /**
@@ -304,6 +307,8 @@ namespace config {
 
     std::string gamepad;  ///< Virtual controller profile selected by configuration.
     std::string gamepad_driver;  ///< Virtual gamepad backend policy on Windows and macOS.
+    std::string ojd_socket_path;  ///< OpenJoystickDriver endpoint socket path; empty disables the OJD backend.
+    std::string ojd_token;  ///< OpenJoystickDriver endpoint token with the control scope.
     bool ds4_back_as_touchpad_click;  ///< Map Back/Select to touchpad click for PlayStation-style gamepads.
     bool motion_as_ds4;  ///< Prefer PlayStation-style emulation for client gamepads with motion controls.
     bool touchpad_as_ds4;  ///< Prefer PlayStation-style emulation for client gamepads with touchpad input.

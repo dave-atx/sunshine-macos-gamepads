@@ -73,6 +73,8 @@ const config = ref(props.config)
 const keybindingPairs = ref(parseKeybindings(config.value.keybindings))
 
 const vigembusGamepads = new Set(['auto', 'x360', 'ds4'])
+/** Both OJD options are required for the backend to activate. */
+const ojdReady = computed(() => Boolean(config.value.ojd_socket_path && config.value.ojd_token))
 const vigembusOnly = computed(() => props.platform === 'windows' && config.value.gamepad_driver === 'vigembus')
 const gamepadDriverSelection = computed({
   get: () => props.platform === 'macos' && !config.value.gamepad_driver ? 'virtualhid' : config.value.gamepad_driver,
@@ -134,6 +136,41 @@ watch(
         <option value="none">{{ $t('config.gamepad_driver_none') }}</option>
       </select>
       <div class="form-text">{{ $t(platform === 'macos' ? 'config.gamepad_driver_macos_desc' : 'config.gamepad_driver_desc') }}</div>
+    </div>
+
+    <!-- OpenJoystickDriver backend (macOS) -->
+    <div class="mb-3" v-if="platform === 'macos' && config.controller === 'enabled' && config.gamepad_driver !== 'none'">
+      <label class="form-label">{{ $t('config.ojd_title') }}</label>
+      <div class="form-text mb-2">{{ $t('config.ojd_desc') }}</div>
+
+      <div class="mb-2">
+        <label for="ojd_socket_path" class="form-label">{{ $t('config.ojd_socket_path') }}</label>
+        <input
+          id="ojd_socket_path"
+          type="text"
+          class="form-control"
+          v-model="config.ojd_socket_path"
+          :placeholder="$t('config.ojd_socket_path_placeholder')"
+        />
+        <div class="form-text">{{ $t('config.ojd_socket_path_desc') }}</div>
+      </div>
+
+      <div class="mb-2">
+        <label for="ojd_token" class="form-label">{{ $t('config.ojd_token') }}</label>
+        <input
+          id="ojd_token"
+          type="password"
+          class="form-control"
+          v-model="config.ojd_token"
+          :placeholder="$t('config.ojd_token_placeholder')"
+          autocomplete="off"
+        />
+        <div class="form-text">{{ $t('config.ojd_token_desc') }}</div>
+      </div>
+
+      <div class="alert" :class="ojdReady ? 'alert-success' : 'alert-info'" role="status">
+        {{ $t(ojdReady ? 'config.ojd_status_ready' : 'config.ojd_status_incomplete') }}
+      </div>
     </div>
 
     <!-- Emulated Gamepad Type -->

@@ -846,6 +846,8 @@ namespace config {
 
     "auto",  // Default gamepad profile.
     {},  // Windows requests a backend choice; macOS defaults to Virtual HID Broker.
+    {},  // ojd_socket_path: empty disables the OpenJoystickDriver backend.
+    {},  // ojd_token: empty disables the OpenJoystickDriver backend.
     true,  // back as touchpad click enabled for PlayStation-style gamepads
     true,  // client gamepads with motion events use PlayStation-style emulation
     true,  // client gamepads with touchpads use PlayStation-style emulation
@@ -1835,6 +1837,14 @@ namespace config {
                                                                         GAMEPAD_DRIVER_NONE,
                                                                       });
     string_restricted_f(vars, "gamepad"s, input.gamepad, get_supported_gamepad_options());
+
+    // OpenJoystickDriver gamepad backend. Both options are plain strings because
+    // the socket path is per-user (under $TMPDIR) and the token is opaque.
+    // Leaving either empty keeps the OJD backend disabled, so an unconfigured
+    // install behaves exactly as before. An invalid token is reported with its
+    // specific error at session start rather than silently falling back.
+    string_f(vars, "ojd_socket_path", input.ojd_socket_path);
+    string_f(vars, "ojd_token", input.ojd_token);
 #ifdef _WIN32
     if (input.gamepad_driver == GAMEPAD_DRIVER_VIGEMBUS && input.gamepad != "auto"sv && input.gamepad != "x360"sv && input.gamepad != "ds4"sv) {
       BOOST_LOG(warning) << "Gamepad type '"sv << input.gamepad << "' is not supported by ViGEmBus; using automatic selection"sv;

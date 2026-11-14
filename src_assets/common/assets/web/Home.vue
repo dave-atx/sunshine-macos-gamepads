@@ -180,6 +180,7 @@
         platform: "",
         controllerEnabled: false,
         gamepadDriver: '',
+        ojdConfigured: false,
         virtualhid: null,
         virtualhidLicense: null,
         vigembus: null,
@@ -193,6 +194,9 @@
         this.platform = config.platform;
         this.controllerEnabled = config.controller !== "disabled";
         this.gamepadDriver = config.gamepad_driver || '';
+        // The OJD backend is enabled purely by config, so the home page can tell
+        // whether gamepads work without asking the platform layer.
+        this.ojdConfigured = Boolean(config.ojd_socket_path && config.ojd_token);
         this.version = new SunshineVersion(null, config.version);
         try {
           const response = await fetch('./api/permissions');
@@ -332,6 +336,12 @@
        * @returns {object|null} Warning or development-build notice, when applicable.
        */
       buildMacosVirtualInputNotice() {
+        // The OpenJoystickDriver backend creates virtual gamepads through a
+        // separately entitled broker and needs no libvirtualhid license. When it
+        // is configured, the license and broker warnings below do not apply.
+        if (this.ojdConfigured) {
+          return null;
+        }
         if (this.virtualhidLicense && !this.virtualhidLicense.licensed) {
           return this.virtualhidLicense.service_available
             ? this.buildVirtualInputNotice(true, 'index.virtualhid_macos_license_title', [{ key: 'index.virtualhid_macos_license_desc' }])

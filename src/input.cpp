@@ -35,6 +35,10 @@ extern "C" {
 #include "logging.h"
 #include "platform/common.h"
 #include "platform/virtualhid_input.h"
+
+#if defined(__APPLE__)
+  #include "nexus/ojd/sunshine_bridge.hpp"
+#endif
 #include "thread_pool.h"
 #include "utility.h"
 
@@ -2454,6 +2458,17 @@ namespace input {
    * @brief Probe connected gamepads and update input capability state.
    */
   bool probe_gamepads() {
+#if defined(__APPLE__)
+    // The OJD backend is not represented in libvirtualhid's gamepad list, so
+    // without this check a working OJD configuration would still log "No
+    // gamepad input is available". Both options are required, matching the
+    // configure() call in alloc_gamepad().
+    auto &bridge = nexus::ojd::sunshine::global_bridge();
+    bridge.configure(config::input.ojd_socket_path, config::input.ojd_token, "sunshine");
+    if (bridge.availability() == nexus::ojd::sunshine::Availability::ready) {
+      return false;
+    }
+#endif
     const auto &gamepads = platf::supported_gamepads(std::addressof(platf_input));
     return std::ranges::none_of(gamepads, [](const auto &gamepad) {
       return gamepad.is_enabled && gamepad.name != "auto";

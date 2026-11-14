@@ -5,7 +5,14 @@ cmake_minimum_required(VERSION 3.24)
 # `third-party/libvirtualhid` requires 3.24
 # todo - set this conditionally
 
-project(Sunshine VERSION 0.0.0
+# Fork version. Upstream leaves this at 0.0.0 and relies on CI to stamp a release
+# version, so a local build reports "0.0.0-dirty". This fork carries a real version
+# so the Web UI and logs identify which build produced a bug report.
+if(NOT DEFINED PROJECT_VERSION OR PROJECT_VERSION STREQUAL "0.0.0")
+    set(SUNSHINE_FORK_VERSION "2026.11.0")
+endif()
+
+project(Sunshine VERSION ${SUNSHINE_FORK_VERSION}
         DESCRIPTION "Self-hosted game stream host for Moonlight"
         HOMEPAGE_URL "https://sunshine.lizardbyte.dev")
 

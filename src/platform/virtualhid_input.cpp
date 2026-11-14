@@ -23,6 +23,13 @@
 #include "src/logging.h"
 #include "virtualhid_input.h"
 
+#if defined(__APPLE__)
+  // Optional OJD backend: lets macOS create virtual gamepads through a
+  // separately entitled local broker, since this build holds no HID entitlement.
+  #include "nexus/ojd/sunshine_adapter.hpp"
+  #include "nexus/ojd/sunshine_bridge.hpp"
+#endif
+
 using namespace std::literals;
 
 namespace platf::virtualhid {
@@ -1194,6 +1201,23 @@ namespace platf {
 
 #ifndef _WIN32
   int alloc_gamepad(input_t &input, const gamepad_id_t &id, const gamepad_arrival_t &metadata, feedback_queue_t feedback_queue) {
+#if defined(__APPLE__)
+    // Prefer OJD when it is configured. Everything the app needs (socket path and
+    // a control-scoped token) comes from the config, so an unconfigured install
+    // falls through to libvirtualhid unchanged.
+    nexus::ojd::sunshine::global_bridge().configure(
+        config::input.ojd_socket_path,
+        config::input.ojd_token,
+        "sunshine");
+
+    if (nexus::ojd::sunshine::global_bridge().availability() ==
+        nexus::ojd::sunshine::Availability::ready) {
+      if (nexus::ojd::sunshine::alloc_gamepad(id.globalIndex) == 0) {
+        BOOST_LOG(info) << "Gamepad "sv << id.globalIndex << " uses the OpenJoystickDriver backend"sv;
+        return 0;
+      }
+    }
+#endif
     return virtualhid::alloc_gamepad(virtualhid::get_input_context(input), id, metadata, std::move(feedback_queue));
   }
 
@@ -1202,10 +1226,18 @@ namespace platf {
   }
 
   void free_gamepad(input_t &input, int nr) {
+#if defined(__APPLE__)
+    nexus::ojd::sunshine::free_gamepad(nr);
+#endif
     virtualhid::free_gamepad(virtualhid::get_input_context(input), nr);
   }
 
   void gamepad_update(input_t &input, int nr, const gamepad_state_t &gamepad_state) {
+#if defined(__APPLE__)
+    if (nexus::ojd::sunshine::submit_gamepad(nr, gamepad_state)) {
+      return;
+    }
+#endif
     virtualhid::gamepad_update(virtualhid::get_input_context(input), nr, gamepad_state);
   }
 

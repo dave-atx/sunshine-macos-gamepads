@@ -481,7 +481,17 @@
     "wan_encryption_mode": "WAN Encryption Mode",
     "wan_encryption_mode_1": "Enabled for supported clients (default)",
     "wan_encryption_mode_2": "Required for all clients",
-    "wan_encryption_mode_desc": "This determines when encryption will be used when streaming over the Internet. Encryption can reduce streaming performance, particularly on less powerful hosts and clients."
+    "wan_encryption_mode_desc": "This determines when encryption will be used when streaming over the Internet. Encryption can reduce streaming performance, particularly on less powerful hosts and clients.",
+    "ojd_title": "OpenJoystickDriver gamepads",
+    "ojd_desc": "Sunshine can create virtual gamepads on macOS through OpenJoystickDriver, a separately signed app that holds Apple's restricted virtual-HID entitlement. Install it, then paste the endpoint socket path and a control token below. Leave both empty to disable this backend.",
+    "ojd_socket_path": "Endpoint socket path",
+    "ojd_socket_path_placeholder": "/var/folders/.../com.openjoystickdriver.endpoint.sock",
+    "ojd_socket_path_desc": "Run `ojd --json access status` and use the socketPath value. The path is per-user and changes when the temporary directory is cleared.",
+    "ojd_token": "Endpoint token",
+    "ojd_token_placeholder": "ojd_...",
+    "ojd_token_desc": "Create it with `ojd access grant --token sunshine --scope read --scope control`. The token grants control of the virtual gamepads, so treat it as a password. It is never written to logs.",
+    "ojd_status_ready": "Both values are set, so the OpenJoystickDriver backend is active.",
+    "ojd_status_incomplete": "Set both values to enable the OpenJoystickDriver backend. Until then, macOS gamepads use libvirtualhid, which needs a paid broker license."
   },
   "index": {
     "permissions_missing_title": "Sunshine needs permissions",

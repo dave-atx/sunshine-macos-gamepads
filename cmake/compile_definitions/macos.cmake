@@ -69,3 +69,21 @@ set(PLATFORM_TARGET_FILES
         "${CMAKE_SOURCE_DIR}/third-party/TPCircularBuffer/TPCircularBuffer.h"
         ${APPLE_ENTITLEMENTS_FILE}
         ${APPLE_PLIST_FILE})
+
+# OpenJoystickDriver virtual gamepad backend.
+#
+# Apple restricts com.apple.developer.hid.virtual.device to approved teams, so a
+# self-built Sunshine cannot create HID devices itself. This component forwards
+# gamepad input to a separately entitled local broker over its documented
+# endpoint instead. It is inert unless ojd_socket_path and ojd_token are set.
+set(NEXUS_OJD_DIR "${CMAKE_SOURCE_DIR}/third-party/nexus-ojd")
+if(EXISTS "${NEXUS_OJD_DIR}/CMakeLists.txt")
+    add_subdirectory("${NEXUS_OJD_DIR}" "${CMAKE_BINARY_DIR}/nexus-ojd")
+
+    list(APPEND PLATFORM_TARGET_FILES
+            "${NEXUS_OJD_DIR}/src/sunshine_adapter.cpp")
+    list(APPEND SUNSHINE_EXTERNAL_LIBRARIES ojd_client)
+    include_directories(SYSTEM "${NEXUS_OJD_DIR}/include")
+else()
+    message(WARNING "nexus-ojd component not found at ${NEXUS_OJD_DIR}; OJD gamepad backend disabled")
+endif()
