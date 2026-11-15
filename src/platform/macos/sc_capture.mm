@@ -123,8 +123,49 @@ API_AVAILABLE(macos(14.0))
 }
 
 - (void)setFrameWidth:(int)frameWidth frameHeight:(int)frameHeight {
+  BOOL changed = (self.frameWidth != frameWidth || self.frameHeight != frameHeight);
+
   self.frameWidth = frameWidth;
   self.frameHeight = frameHeight;
+
+  // The capture stream is created from these ivars at captureVideo time, but
+  // the encoder negotiates the client's resolution afterwards, from
+  // init_encoder(). Updating the ivars alone therefore changes nothing: the
+  // running SCStream keeps delivering its original size, the encoder rejects
+  // every frame as a size mismatch, and the client receives no video at all
+  // while Sunshine floods the log with "captured frame is WxH but the session
+  // expects AxB".
+  //
+  // Push the new size into the live stream configuration as well. Apple supports
+  // reconfiguring a running stream through updateConfiguration, which keeps the
+  // capture session (and its permission state) intact.
+  if (changed) {
+    SCStream *stream = nil;
+    SCStreamConfiguration *config = nil;
+
+    @synchronized(self) {
+      stream = [self.stream retain];
+      config = [self.streamConfiguration copy];
+    }
+
+    if (stream && config) {
+      config.width = frameWidth;
+      config.height = frameHeight;
+
+      [stream updateConfiguration:config completionHandler:^(NSError *update_error) {
+        // Not named `error`: Boost.Log treats that as a severity keyword.
+        if (update_error) {
+          BOOST_LOG(error) << "SCCapture failed to apply "sv << frameWidth << 'x' << frameHeight
+                           << " to the running stream: "sv << error_description(update_error);
+        } else {
+          BOOST_LOG(info) << "SCCapture renegotiated running stream to "sv << frameWidth << 'x' << frameHeight;
+        }
+      }];
+    }
+
+    [config release];
+    [stream release];
+  }
 }
 
 - (SCDisplay *)findDisplayWithID:(CGDirectDisplayID)displayID {
