@@ -162,6 +162,9 @@ before any backend is reached in that case.
 
 ## Building from source
 
+Requires an Apple silicon or Intel Mac, macOS 14.2+, Xcode command line tools and
+[Homebrew](https://brew.sh).
+
 ```sh
 brew install cmake ninja boost ffmpeg opus nlohmann-json miniupnpc icu4c
 
@@ -171,18 +174,39 @@ cd sunshine-macos-gamepads
 # build-deps must be on a *tagged* commit, or FFmpeg resolves to a release that does not exist.
 git -C third-party/build-deps fetch --depth 1 origin tag v2026.1017.131201
 git -C third-party/build-deps checkout v2026.1017.131201
-git -C third-party/moonlight-common-c submodule update --init --recursive
+
+# Nested submodules: moonlight-common-c needs enet and nanors, and Sunshine's test
+# target needs googletest. --recursive on the clone covers most of it, but these
+# are the ones that bite on a shallow or partial clone.
+git submodule update --init --recursive
 
 cmake -S . -B build -G Ninja \
   -DCMAKE_BUILD_TYPE=Release \
   -DSUNSHINE_ENABLE_TRAY=OFF \
+  -DBUILD_TESTS=OFF \
   -DCMAKE_EXE_LINKER_FLAGS="-L/opt/homebrew/opt/icu4c@79/lib"
 
 cmake --build build -j8
 ```
 
-`-DSUNSHINE_ENABLE_TRAY=OFF` avoids Qt. The ICU flag is needed because Boost.Locale statically links it and
-Homebrew's `icu4c` is keg-only. The app is `build/Sunshine.app`.
+The app is `build/Sunshine.app`.
+
+### Why these flags exist
+
+All three are required on macOS. Omitting any of them produces a confusing error that does not name the real cause:
+
+| Flag | Without it you get | Why |
+|---|---|---|
+| `-DSUNSHINE_ENABLE_TRAY=OFF` | `Could not determine the Qt version used by the tray target` | The tray needs Qt; this fork is a streaming host, not a menu-bar app. |
+| `-DBUILD_TESTS=OFF` | `udev not found`, or `googletest/... does not contain a CMakeLists.txt` | `BUILD_TESTS` defaults to **on**. The test target calls `find_package(Udev 255)` — a **Linux-only** library — and needs the nested googletest submodule. Neither exists on macOS, so configuring fails before it ever reaches the actual build. |
+| ICU linker path | `ld: library 'icudata' not found` | Boost.Locale statically links ICU, and Homebrew's `icu4c` is keg-only so it is not on the default linker path. |
+
+If you hit `udev not found`, you are almost certainly missing `-DBUILD_TESTS=OFF`. It is not a Linux-only project
+problem — it is macOS trying to configure a Linux test dependency.
+
+To build the upstream test suite instead (needs googletest plus a Linux target), leave `BUILD_TESTS` on and drop
+`-DSUNSHINE_ENABLE_TRAY` accordingly. This fork's own component tests do not need any of that — see below.
+
 
 ### Component tests
 
@@ -221,6 +245,10 @@ configured, behaviour is identical to upstream.
 | Symptom | Cause and fix |
 |---|---|
 | No pad appears, log says `No gamepad input is available` | `gamepad_driver` is `none`, or `ojd_socket_path`/`ojd_token` are unset. Sunshine drops packets before any backend. |
+| Build fails: `udev not found` | Missing `-DBUILD_TESTS=OFF`. The test target wants udev 255, a Linux-only library. See [Why these flags exist](#why-these-flags-exist). |
+| Build fails: `googletest ... does not contain a CMakeLists.txt` | Same cause — the nested test submodule is absent. Add `-DBUILD_TESTS=OFF`, or run `git submodule update --init --recursive`. |
+| Build fails: `Could not determine the Qt version` | Missing `-DSUNSHINE_ENABLE_TRAY=OFF`. |
+| Build fails: `ld: library 'icudata' not found` | Add `-DCMAKE_EXE_LINKER_FLAGS="-L/opt/homebrew/opt/icu4c@79/lib"`; Homebrew's ICU is keg-only. |
 | `Input Monitoring denied` from OJD | Grant Input Monitoring and Accessibility to `/Applications/VirtualHIDBroker.app` / OpenJoystickDriver in System Settings → Privacy & Security. |
 | Pad appears, then vanishes after ~2 s | OJD's feed idle timeout. The bridge sends keep-alives; if it persists, the client stopped sending frames — check the Moonlight connection. |
 | Works, then stops after a reboot | The socket path is under `$TMPDIR` and changed. Re-read `ojd --json access status` and update `ojd_socket_path`. |
