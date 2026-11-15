@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
   <key>CFBundleIdentifier</key>
-  <string>@PROJECT_FQDN@</string>
+  <string>@SUNSHINE_MACOS_BUNDLE_ID@</string>
   <key>CFBundleName</key>
   <string>@CMAKE_PROJECT_NAME@</string>
   <key>CFBundleDisplayName</key>

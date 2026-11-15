@@ -191,9 +191,57 @@ cmake --build build -j8
 
 The app is `build/Sunshine.app`.
 
-### Why these flags exist
+### Screen Recording will not stick on an ad-hoc build
 
-All three are required on macOS. Omitting any of them produces a confusing error that does not name the real cause:
+This is the single most confusing failure in the whole setup, and it is a macOS behaviour rather than a Sunshine bug.
+
+A CMake-built app is **ad-hoc signed**. Its designated requirement is `cdhash H"..."` — a hash of the exact binary.
+That hash changes on every rebuild. macOS keys privacy grants to the designated requirement, so after a rebuild the
+grant it holds no longer matches the running binary. System Settings shows **Screen Recording as enabled**, the app
+still logs:
+
+```
+Error: No screen capture permission!
+Error: Platform failed to initialize
+```
+
+and toggling the switch does nothing. Only `tccutil reset ScreenCapture` clears the stale record.
+
+Two things make this worse, both fixed in this fork:
+
+- The bundle identifier used to be `dev.lizardbyte.app.Sunshine` — **the same as upstream**. A grant made for an
+  installed upstream Sunshine, or for an earlier build, was reused against a binary that never matched it. This fork
+  now uses `dev.srikanthamsa.sunshine-gamepads`, so it owns a separate privacy record.
+- A stable signing identity was never applied.
+
+**Fix it by signing with any real certificate.** A free Apple Development certificate is enough — no paid account, no
+Developer ID, no notarization:
+
+```sh
+security find-identity -v -p codesigning     # find your identity
+
+cmake -S . -B build -G Ninja \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DSUNSHINE_ENABLE_TRAY=OFF \
+  -DBUILD_TESTS=OFF \
+  -DSUNSHINE_MACOS_SIGN_IDENTITY="Apple Development: you@example.com (TEAMID)" \
+  -DCMAKE_EXE_LINKER_FLAGS="-L/opt/homebrew/opt/icu4c@79/lib"
+```
+
+With a certificate the designated requirement becomes
+`identifier "dev.srikanthamsa.sunshine-gamepads" and anchor apple generic and certificate leaf[...]` — stable across
+rebuilds, so the grant sticks. Verify with:
+
+```sh
+codesign -d -r- build/Sunshine.app | tail -1
+# identifier-based  -> grants survive rebuilds
+# cdhash H"..."     -> grants will break on the next build
+```
+
+If you build unsigned anyway, run `tccutil reset ScreenCapture` after every rebuild and re-grant. Expect it.
+
+### Why these flags exist
+All three of these are required on macOS. Omitting any of them produces a confusing error that does not name the real cause:
 
 | Flag | Without it you get | Why |
 |---|---|---|

@@ -40,6 +40,25 @@ set(PROJECT_LICENSE "GPL-3.0-only")
 
 set(PROJECT_FQDN "dev.lizardbyte.app.Sunshine")
 
+# macOS bundle identifier.
+#
+# This fork must NOT share upstream's identifier. macOS keys privacy grants
+# (screen recording, input monitoring, accessibility) on the bundle identifier
+# plus the code signature. Ad-hoc signing gives a designated requirement of
+# `cdhash H"..."`, which changes on every rebuild. With upstream's identifier,
+# a grant made for an upstream install, or for a previous build of this fork,
+# never matches the binary that is actually running: System Settings shows the
+# toggle as on while CGPreflightScreenCaptureAccess keeps returning false, and
+# the only escape is `tccutil reset ScreenCapture` after every rebuild.
+#
+# A distinct identifier gives this fork its own TCC record, so it stops fighting
+# an installed upstream Sunshine and a rebuild no longer collides with its own
+# earlier grant. Only macOS is affected; Linux packaging keeps PROJECT_FQDN.
+if(APPLE)
+    set(SUNSHINE_MACOS_BUNDLE_ID "dev.srikanthamsa.sunshine-gamepads" CACHE STRING
+        "Bundle identifier for the macOS app; must differ from upstream")
+endif()
+
 set(PROJECT_BRIEF_DESCRIPTION "GameStream host for Moonlight")  # must be <= 35 characters
 
 set(PROJECT_LONG_DESCRIPTION "Offering low latency, cloud gaming server capabilities with support for AMD, Intel, \
