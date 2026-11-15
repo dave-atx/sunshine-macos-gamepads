@@ -271,6 +271,39 @@ void test_button_mapping_positions() {
   check(!north.buttons.empty() && north.buttons[0] == Button::north, "Moonlight Y -> North");
 }
 
+void test_dpad_uses_its_own_field() {
+  // OJD ignores "DpadUp" inside `buttons` and requires a separate `dpad` array.
+  // Sending them as buttons made the d-pad do nothing at all.
+  const std::pair<std::uint32_t, Button> cases[] = {
+      {moonlight::dpad_up, Button::dpad_up},
+      {moonlight::dpad_down, Button::dpad_down},
+      {moonlight::dpad_left, Button::dpad_left},
+      {moonlight::dpad_right, Button::dpad_right},
+  };
+
+  for (const auto &[bit, expected] : cases) {
+    GamepadState state;
+    state.button_flags = bit;
+    const auto frame = full_frame(state);
+
+    check_eq(frame.dpad.size(), std::size_t{1}, "dpad direction lands in frame.dpad");
+    check_eq(frame.buttons.size(), std::size_t{0}, "dpad direction stays out of frame.buttons");
+    if (!frame.dpad.empty()) {
+      check(frame.dpad[0] == expected, "dpad direction maps to the right OJD control");
+    }
+  }
+}
+
+void test_dpad_frame_json() {
+  GamepadState state;
+  state.button_flags = moonlight::dpad_up;
+  const auto text = build_frame(full_frame(state));
+  check(text.find("\"dpad\":[\"DpadUp\"]") != std::string::npos,
+        "frame renders a dpad array");
+  check(text.find("\"buttons\"") == std::string::npos,
+        "a pure d-pad frame carries no buttons key");
+}
+
 void test_all_buttons_map() {
   struct Case {
     std::uint32_t bit;
@@ -289,10 +322,6 @@ void test_all_buttons_map() {
       {moonlight::home, Button::guide, "Guide"},
       {moonlight::left_stick, Button::left_stick_click, "LS"},
       {moonlight::right_stick, Button::right_stick_click, "RS"},
-      {moonlight::dpad_up, Button::dpad_up, "Up"},
-      {moonlight::dpad_down, Button::dpad_down, "Down"},
-      {moonlight::dpad_left, Button::dpad_left, "Left"},
-      {moonlight::dpad_right, Button::dpad_right, "Right"},
   };
   for (const auto &test : cases) {
     GamepadState state;
@@ -316,8 +345,19 @@ void test_axis_scaling() {
     if (axis.axis == Axis::left_stick_x) left_x = axis.value;
     if (axis.axis == Axis::left_stick_y) left_y = axis.value;
   }
-  check_eq(left_x, -1.0, "int16 min maps to -1.0");
-  check(left_y > 0.999 && left_y <= 1.0, "int16 max maps to ~1.0");
+  check_eq(left_x, -1.0, "int16 min maps to -1.0 on X");
+  // OJD's Y is inverted relative to Moonlight: ly=+32767 is "down" in Moonlight,
+  // and must reach OJD as a negative LeftStickY.
+  check(left_y < -0.999 && left_y >= -1.0, "Moonlight stick-down maps to negative OJD Y");
+
+  GamepadState up;
+  up.ly = -32768;
+  const auto upFrame = full_frame(up);
+  for (const auto &axis : upFrame.axes) {
+    if (axis.axis == Axis::left_stick_y) {
+      check(axis.value > 0.999 && axis.value <= 1.0, "Moonlight stick-up maps to positive OJD Y");
+    }
+  }
 
   GamepadState centered;
   const auto neutral = full_frame(centered);
@@ -725,6 +765,8 @@ int main() {
   RUN(test_parse_rejects_malformed);
   RUN(test_parse_skips_unknown_fields);
   RUN(test_button_mapping_positions);
+  RUN(test_dpad_uses_its_own_field);
+  RUN(test_dpad_frame_json);
   RUN(test_all_buttons_map);
   RUN(test_axis_scaling);
   RUN(test_trigger_scaling);

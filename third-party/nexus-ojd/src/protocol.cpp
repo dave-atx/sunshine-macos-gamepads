@@ -242,6 +242,21 @@ std::string build_frame(const Frame &frame) {
     out.push_back(']');
   }
 
+  // D-pad directions travel in their own field. Sending them in `buttons` is
+  // silently ignored by OJD, which is why the d-pad did nothing.
+  if (!frame.dpad.empty()) {
+    out.push_back(',');
+    append_key(out, "dpad");
+    out.push_back('[');
+    for (std::size_t index = 0; index < frame.dpad.size(); ++index) {
+      if (index != 0) {
+        out.push_back(',');
+      }
+      detail::append_json_string(out, to_string(frame.dpad[index]));
+    }
+    out.push_back(']');
+  }
+
   if (!frame.axes.empty()) {
     out.push_back(',');
     append_key(out, "axes");

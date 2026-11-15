@@ -81,6 +81,9 @@ struct AxisValue {
 /// to be present.
 struct Frame {
   std::vector<Button> buttons;
+  /// D-pad directions. OJD treats these as a separate field and ignores
+  /// "DpadUp" and friends inside `buttons`, so they must be listed here.
+  std::vector<Button> dpad;
   std::vector<AxisValue> axes;
   /// Minimum time to show this frame. Empty means "until the next frame".
   std::int32_t hold_milliseconds = -1;
