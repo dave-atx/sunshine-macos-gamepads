@@ -1,0 +1,37 @@
+name: Bug report
+description: Something broke — gamepad, stream, or build.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report! Streaming logs (from the console output) help a lot.
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version and chip
+      placeholder: e.g. macOS 15.2 on M2 MacBook Air
+    validations:
+      required: true
+  - type: input
+    id: gamepad
+    attributes:
+      label: Controller
+      placeholder: e.g. DualSense over Bluetooth
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Start Sunshine with a virtual gamepad enabled
+        2. Connect from Moonlight
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Paste the relevant Sunshine log lines.
+      render: shell
