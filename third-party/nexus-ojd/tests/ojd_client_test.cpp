@@ -453,6 +453,10 @@ class FakeEndpoint {
   void set_no_control_scope(bool value) { omit_control_ = value; }
   std::size_t frames_received() const { return frames_.load(); }
   bool saw_keepalive() const { return keepalive_.load(); }
+  std::string last_frame() const {
+    std::lock_guard lock(frame_mutex_);
+    return last_frame_;
+  }
 
   void stop() {
     stop_ = true;
@@ -553,8 +557,11 @@ class FakeEndpoint {
       const std::string line = read_line(fd);
       if (line.empty()) return;
       if (line.find("\"kind\":\"Frame\"") != std::string::npos) {
+        {
+          std::lock_guard lock(frame_mutex_);
+          last_frame_ = line;
+        }
         ++frames_;
-        last_frame_ = line;
       } else if (line.find("\"kind\":\"KeepAlive\"") != std::string::npos) {
         keepalive_ = true;
       } else if (line.find("\"kind\":\"Drain\"") != std::string::npos) {
@@ -573,11 +580,12 @@ class FakeEndpoint {
   std::atomic<bool> stop_{false};
   std::atomic<std::size_t> frames_{0};
   std::atomic<bool> keepalive_{false};
+  mutable std::mutex frame_mutex_;
+  std::string last_frame_;
 
  public:
   std::string hello_;
   std::string feed_request_;
-  std::string last_frame_;
 };
 
 void test_parse_rumble_command() {
@@ -663,7 +671,7 @@ void test_handshake_success() {
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
   }
   check_eq(endpoint.frames_received(), std::size_t{1}, "server received one frame");
-  check(endpoint.last_frame_.find("South") != std::string::npos, "frame carried South");
+  check(endpoint.last_frame().find("South") != std::string::npos, "frame carried South");
 
   client.disconnect();
   check(!client.connected(), "disconnect clears connected");
@@ -740,6 +748,38 @@ void test_pad_session_round_trip() {
   pool.release_all();
 }
 
+void test_pad_session_keeps_held_axis() {
+  FakeEndpoint endpoint;
+  check(endpoint.start(), "endpoint starts");
+
+  SessionConfig config;
+  config.socket_path = endpoint.path();
+  config.token = "t";
+  config.token_name = "n";
+  config.max_fps = 100;
+
+  PadPool pool(config);
+  GamepadState state;
+  state.ly = 32767;  // stick held fully forward
+  check(pool.update(0, state), "pad session starts");
+  for (int i = 0; i < 100 && endpoint.frames_received() == 0; ++i) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  }
+  check_eq(endpoint.frames_received(), std::size_t{1}, "first frame published");
+
+  // Only X moves; Y is still held, so OJD must still be told about it.
+  state.lx = 1000;
+  check(pool.update(0, state), "second update accepted");
+  for (int i = 0; i < 100 && endpoint.frames_received() < 2; ++i) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  }
+  check_eq(endpoint.frames_received(), std::size_t{2}, "second frame published");
+  check(endpoint.last_frame().find("LeftStickY") != std::string::npos,
+        "held stick axis re-sent when the other axis moves");
+
+  pool.release_all();
+}
+
 }  // namespace
 
 #define RUN(fn) do { \
@@ -781,6 +821,7 @@ int main() {
   RUN(test_handshake_feed_refused);
   RUN(test_connect_missing_socket);
   RUN(test_pad_session_round_trip);
+  RUN(test_pad_session_keeps_held_axis);
 
   if (g_failures == 0) {
     std::cout << "All OJD client tests passed.\n";

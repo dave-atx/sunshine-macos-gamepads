@@ -62,8 +62,10 @@ cleanly on teardown.
 ## Design constraints that shaped this
 
 1. **OJD frames are absolute, not incremental.** An omitted control is neutral,
-   not "unchanged". A diff must therefore re-send held buttons every frame or
-   they drop. `diff_frame()` does this; do not "optimise" it into a delta.
+   not "unchanged". `PadSession` therefore sends every control on every frame
+   (`full_frame()`); a delta drops held buttons and snaps a held stick axis to
+   center when the other axis moves. `diff_frame()` re-sends held buttons but
+   only changed axes, so don't use it for the feed.
 2. **Face buttons are positional.** Sunshine/Moonlight's `A` becomes OJD's
    `South`. On an Xbox pad they coincide; a DualSense label would not. Mapping by
    position is deliberate.
