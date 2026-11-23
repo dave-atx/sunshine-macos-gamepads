@@ -122,7 +122,7 @@ void test_token_proof_shape() {
 void test_hello_token_message() {
   const auto hello = build_hello_token("driver", "ojd_secret", "bm9uY2U");
   check(hello.find("\"kind\":\"Hello\"") != std::string::npos, "hello has kind");
-  check(hello.find("openjoystickdriver/v1alpha2") != std::string::npos, "hello has apiVersion");
+  check(hello.find("openjoystickdriver/v1alpha3") != std::string::npos, "hello has apiVersion");
   check(hello.find("\"scopes\":[\"Control\"]") != std::string::npos, "hello requests Control");
   check(hello.find("\"tokenName\":\"driver\"") != std::string::npos, "hello names token");
   check(hello.find("ojd_secret") == std::string::npos, "token itself is never sent");
@@ -151,7 +151,7 @@ void test_frame_message() {
 
 void test_frame_neutral() {
   const auto text = build_frame(Frame{});
-  check_eq(text, std::string{"{\"apiVersion\":\"openjoystickdriver/v1alpha2\",\"kind\":\"Frame\"}"},
+  check_eq(text, std::string{"{\"apiVersion\":\"openjoystickdriver/v1alpha3\",\"kind\":\"Frame\"}"},
            "empty frame is just apiVersion and kind");
 }
 
@@ -191,7 +191,7 @@ void test_json_escaping() {
 
 void test_parse_challenge() {
   const auto reply = parse_reply(
-      R"({"apiVersion":"openjoystickdriver/v1alpha2","kind":"Challenge","nonce":"ABC-123"})");
+      R"({"apiVersion":"openjoystickdriver/v1alpha3","kind":"Challenge","nonce":"ABC-123"})");
   check(reply.has_value(), "challenge parses");
   if (reply) {
     check_eq(reply->kind, std::string{"Challenge"}, "challenge kind");
@@ -201,7 +201,7 @@ void test_parse_challenge() {
 
 void test_parse_welcome() {
   const auto reply = parse_reply(
-      R"({"apiVersion":"openjoystickdriver/v1alpha2","kind":"Welcome","version":"0.6.0-alpha.2","scopes":["Control"]})");
+      R"({"apiVersion":"openjoystickdriver/v1alpha3","kind":"Welcome","version":"0.6.0-alpha.2","scopes":["Control"]})");
   check(reply.has_value(), "welcome parses");
   if (reply) {
     check_eq(reply->kind, std::string{"Welcome"}, "welcome kind");
@@ -214,7 +214,7 @@ void test_parse_welcome() {
 
 void test_parse_status_failure() {
   const auto reply = parse_reply(
-      R"({"apiVersion":"openjoystickdriver/v1alpha2","code":"E1002","kind":"Status","message":"The program has no grant.","status":"Failure"})");
+      R"({"apiVersion":"openjoystickdriver/v1alpha3","code":"E1002","kind":"Status","message":"The program has no grant.","status":"Failure"})");
   check(reply.has_value(), "status parses");
   if (reply) {
     check(reply->is_failure(), "status is failure");
@@ -224,12 +224,12 @@ void test_parse_status_failure() {
 
 void test_parse_version_error_details() {
   const auto reply = parse_reply(
-      R"({"apiVersion":"x","kind":"Status","status":"Failure","code":"E1009","message":"bad","details":{"supportedAPIVersions":["openjoystickdriver/v1alpha2"]}})");
+      R"({"apiVersion":"x","kind":"Status","status":"Failure","code":"E1009","message":"bad","details":{"supportedAPIVersions":["openjoystickdriver/v1alpha3"]}})");
   check(reply.has_value(), "version error parses");
   if (reply) {
     check_eq(reply->supported_versions.size(), std::size_t{1}, "supported versions captured");
     if (!reply->supported_versions.empty()) {
-      check_eq(reply->supported_versions[0], std::string{"openjoystickdriver/v1alpha2"},
+      check_eq(reply->supported_versions[0], std::string{"openjoystickdriver/v1alpha3"},
                "supported version value");
     }
   }
@@ -527,27 +527,27 @@ class FakeEndpoint {
     timeout.tv_usec = 50'000;
     ::setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
 
-    send_line(fd, R"({"apiVersion":"openjoystickdriver/v1alpha2","kind":"Challenge","nonce":")" +
+    send_line(fd, R"({"apiVersion":"openjoystickdriver/v1alpha3","kind":"Challenge","nonce":")" +
                       nonce_ + R"("})");
 
     const std::string hello = read_line(fd);
     hello_ = hello;
 
     const std::string scopes = omit_control_ ? R"(["Read"])" : R"(["Control"])";
-    send_line(fd, R"({"apiVersion":"openjoystickdriver/v1alpha2","kind":"Welcome","version":"0.6.0-alpha.2","scopes":)" +
+    send_line(fd, R"({"apiVersion":"openjoystickdriver/v1alpha3","kind":"Welcome","version":"0.6.0-alpha.2","scopes":)" +
                       scopes + "}");
 
     const std::string feed = read_line(fd);
     feed_request_ = feed;
 
     if (!refuse_code_.empty()) {
-      send_line(fd, R"({"apiVersion":"openjoystickdriver/v1alpha2","kind":"Status","status":"Failure","code":")" +
+      send_line(fd, R"({"apiVersion":"openjoystickdriver/v1alpha3","kind":"Status","status":"Failure","code":")" +
                         refuse_code_ + R"(","message":"refused"})");
       return;
     }
 
     send_line(fd,
-              R"({"apiVersion":"openjoystickdriver/v1alpha2","kind":"FeedSession","as":"SDLCompatible"})");
+              R"({"apiVersion":"openjoystickdriver/v1alpha3","kind":"FeedSession","as":"SDLCompatible"})");
 
     while (!stop_) {
       const std::string line = read_line(fd);
@@ -558,7 +558,7 @@ class FakeEndpoint {
       } else if (line.find("\"kind\":\"KeepAlive\"") != std::string::npos) {
         keepalive_ = true;
       } else if (line.find("\"kind\":\"Drain\"") != std::string::npos) {
-        send_line(fd, R"({"apiVersion":"openjoystickdriver/v1alpha2","kind":"Drained"})");
+        send_line(fd, R"({"apiVersion":"openjoystickdriver/v1alpha3","kind":"Drained"})");
         return;
       }
     }
@@ -583,7 +583,7 @@ class FakeEndpoint {
 void test_parse_rumble_command() {
   // Exact line shape OJD sends (verified against a real endpoint).
   const auto reply = parse_reply(
-      R"({"apiVersion":"openjoystickdriver/v1alpha2","durationMilliseconds":250,"intensities":{"highFrequency":65535,"leftHaptic":0,"leftTrigger":0,"lowFrequency":65535,"rightHaptic":0,"rightTrigger":0},"kind":"RumbleCommand","type":"SetRumble"})");
+      R"({"apiVersion":"openjoystickdriver/v1alpha3","durationMilliseconds":250,"intensities":{"highFrequency":65535,"leftHaptic":0,"leftTrigger":0,"lowFrequency":65535,"rightHaptic":0,"rightTrigger":0},"kind":"RumbleCommand","type":"SetRumble"})");
   check(reply.has_value(), "rumble line parses");
   if (!reply) return;
 
@@ -601,7 +601,7 @@ void test_parse_rumble_command() {
 
 void test_parse_stop_rumble() {
   const auto reply = parse_reply(
-      R"({"apiVersion":"openjoystickdriver/v1alpha2","kind":"RumbleCommand","type":"StopRumble"})");
+      R"({"apiVersion":"openjoystickdriver/v1alpha3","kind":"RumbleCommand","type":"StopRumble"})");
   check(reply.has_value(), "stop rumble parses");
   if (reply) {
     const auto command = parse_rumble_command(*reply);

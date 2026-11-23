@@ -69,7 +69,7 @@ cleanly on teardown.
    position is deliberate.
 3. **Axis conventions already match.** Both use int16 sticks with positive Y
    down, so only scaling differs. There is no Y flip.
-4. **`apiVersion` is alpha.** OJD is at `openjoystickdriver/v1alpha2` and the
+4. **`apiVersion` is alpha.** OJD is at `openjoystickdriver/v1alpha3` and the
    docs state an alpha "can change without a compatibility promise". All protocol
    strings live in `protocol.hpp`; an upstream bump should be one file.
 5. **SIGPIPE is a real hazard.** OJD closes the socket when it refuses a line or
@@ -98,7 +98,7 @@ OJD forwards each rumble a game requests to the feed client, on the same socket
 as `FeedSession`, as a `RumbleCommand` line:
 
 ```json
-{"apiVersion":"openjoystickdriver/v1alpha2","durationMilliseconds":250,
+{"apiVersion":"openjoystickdriver/v1alpha3","durationMilliseconds":250,
  "intensities":{"highFrequency":65535,"leftHaptic":0,"leftTrigger":0,
  "lowFrequency":65535,"rightHaptic":0,"rightTrigger":0},
  "kind":"RumbleCommand","type":"SetRumble"}
