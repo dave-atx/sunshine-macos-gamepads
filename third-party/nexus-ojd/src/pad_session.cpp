@@ -1,6 +1,7 @@
 #include "nexus/ojd/pad_session.hpp"
 
 #include <algorithm>
+#include <optional>
 
 namespace nexus::ojd {
 
@@ -123,6 +124,12 @@ bool PadSession::reconnect_locked() {
 }
 
 void PadSession::read_rumble() {
+  using clock = std::chrono::steady_clock;
+  // A SetRumble carries how long the motors should run. A real pad stops on its
+  // own when that runs out, but the client forwarding this (Moonlight) keeps
+  // rumbling until told otherwise, so synthesize the stop if nothing newer came.
+  std::optional<clock::time_point> expires;
+
   while (true) {
     {
       std::lock_guard lock(mutex_);
@@ -131,9 +138,30 @@ void PadSession::read_rumble() {
       }
     }
 
-    const auto command = client_.wait_for_rumble(std::chrono::milliseconds(100));
+    auto timeout = std::chrono::milliseconds(100);
+    if (expires) {
+      const auto left =
+          std::chrono::ceil<std::chrono::milliseconds>(*expires - clock::now());
+      timeout = std::clamp(left, std::chrono::milliseconds(1), timeout);
+    }
+
+    const auto command = client_.wait_for_rumble(timeout);
     if (!command) {
+      if (expires && clock::now() >= *expires) {
+        expires.reset();
+        if (config_.on_rumble) {
+          config_.on_rumble(slot_, RumbleCommand{});
+        }
+      }
       continue;
+    }
+
+    const bool running = command->set && (command->low_frequency || command->high_frequency ||
+                                          command->left_trigger || command->right_trigger);
+    if (running && command->duration_milliseconds > 0) {
+      expires = clock::now() + std::chrono::milliseconds(command->duration_milliseconds);
+    } else {
+      expires.reset();
     }
     if (config_.on_rumble) {
       config_.on_rumble(slot_, *command);

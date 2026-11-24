@@ -452,6 +452,11 @@ class FakeEndpoint {
   void set_refuse_feed(std::string code) { refuse_code_ = std::move(code); }
   void set_no_control_scope(bool value) { omit_control_ = value; }
   std::size_t frames_received() const { return frames_.load(); }
+  /// Send a line to the client the next time the endpoint is idle.
+  void push_line(std::string line) {
+    std::lock_guard lock(out_mutex_);
+    outbound_.push_back(std::move(line));
+  }
   bool saw_keepalive() const { return keepalive_.load(); }
   std::string last_frame() const {
     std::lock_guard lock(frame_mutex_);
@@ -479,6 +484,15 @@ class FakeEndpoint {
   /// Read one newline-terminated line. A receive timeout is not end-of-stream:
   /// it only means the client is idle, so the loop continues while the endpoint
   /// is still running.
+  void flush_outbound(int fd) {
+    std::vector<std::string> lines;
+    {
+      std::lock_guard lock(out_mutex_);
+      lines.swap(outbound_);
+    }
+    for (const auto &line : lines) send_line(fd, line);
+  }
+
   std::string read_line(int fd) {
     std::string line;
     char c = 0;
@@ -492,6 +506,7 @@ class FakeEndpoint {
           continue;
         }
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
+          flush_outbound(fd);
           continue;  // idle: keep waiting unless the endpoint is stopping
         }
         return line;
@@ -581,6 +596,8 @@ class FakeEndpoint {
   std::atomic<std::size_t> frames_{0};
   std::atomic<bool> keepalive_{false};
   mutable std::mutex frame_mutex_;
+  std::mutex out_mutex_;
+  std::vector<std::string> outbound_;
   std::string last_frame_;
 
  public:
@@ -780,6 +797,50 @@ void test_pad_session_keeps_held_axis() {
   pool.release_all();
 }
 
+void test_pad_session_rumble_expires() {
+  FakeEndpoint endpoint;
+  check(endpoint.start(), "endpoint starts");
+
+  std::mutex mutex;
+  std::vector<RumbleCommand> received;
+
+  SessionConfig config;
+  config.socket_path = endpoint.path();
+  config.token = "t";
+  config.token_name = "n";
+  config.on_rumble = [&](int, const RumbleCommand &command) {
+    std::lock_guard lock(mutex);
+    received.push_back(command);
+  };
+  const auto count = [&]() {
+    std::lock_guard lock(mutex);
+    return received.size();
+  };
+
+  PadPool pool(config);
+  check(pool.update(0, GamepadState{}), "pad session starts");
+  for (int i = 0; i < 100 && endpoint.frames_received() == 0; ++i) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  }
+
+  endpoint.push_line(
+      R"({"apiVersion":"openjoystickdriver/v1alpha3","durationMilliseconds":60,"intensities":{"highFrequency":1000,"leftHaptic":0,"leftTrigger":0,"lowFrequency":2000,"rightHaptic":0,"rightTrigger":0},"kind":"RumbleCommand","type":"SetRumble"})");
+  for (int i = 0; i < 100 && count() < 2; ++i) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  }
+
+  {
+    std::lock_guard lock(mutex);
+    check_eq(received.size(), std::size_t{2}, "rumble forwarded, then stopped");
+    if (received.size() == 2) {
+      check(received[0].set && received[0].low_frequency == 2000, "first is the SetRumble");
+      check(!received[1].set && received[1].low_frequency == 0, "second is a stop");
+    }
+  }
+
+  pool.release_all();
+}
+
 }  // namespace
 
 #define RUN(fn) do { \
@@ -822,6 +883,7 @@ int main() {
   RUN(test_connect_missing_socket);
   RUN(test_pad_session_round_trip);
   RUN(test_pad_session_keeps_held_axis);
+  RUN(test_pad_session_rumble_expires);
 
   if (g_failures == 0) {
     std::cout << "All OJD client tests passed.\n";
